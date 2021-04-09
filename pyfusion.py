@@ -9,6 +9,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("bam", type=str, help="minimum number of breakpoint-spanning reads required for output")
 parser.add_argument("exon", type=str, help="minimum number of breakpoint-spanning reads required for output")
 parser.add_argument("twobit", type=str, help="minimum number of breakpoint-spanning reads required for output")
+parser.add_argument("important-genelist", type=str, help="the most important gene that you don't want to filter it")
 parser.add_argument("--targets", type=str, default='0', help="minimum number of breakpoint-spanning reads required for output")
 parser.add_argument("-o", nargs='?', action="store" , type=str, required=True, help="output directory (tumor.bam directory)")
 parser.add_argument("-r", nargs='?', const=5, default=5 , type=int, help="minimum number of breakpoint-spanning reads required for output")
@@ -25,12 +26,19 @@ parser.add_argument("-a", nargs='?', const=50, default=50 , type=int, help="numb
 parser.add_argument("-e", nargs='?', const=True, default=False , help="disable grouping of input coordinates by column 4 of exons.bed")
 parser.add_argument("-v", nargs='?', const=True, default=False , help="disable verbose output")
 parser.add_argument("-t", nargs='?', const=True, default=False , help="disable running time output")
-parser.add_argument("-C", nargs='?', const=True, default=False , help="disable addition of 'chr' prefix to chromosome names")
 parser.add_argument("-F", nargs='?', const=True, default=False , help="force remake of BLAST database for a particular input")
 args = parser.parse_args()
 
 #===========================================================================================================
 #retrieve depth of region surrounding fusion(s)
+def important_gene(important_genelist,gene1,gene2):
+    with open(important_genelist,'r',encoding='gbk') as f:
+        data = f.readlines()
+        if gene1 + '-' + gene2 + '\n' in data or gene2 + '-' + gene1 + '\n' in data:
+            return True
+        else:
+            return False
+    
 
 def getNormDepth(bestfusions, buffer, targets, OUTPUTDIR, bam):
     coors = {} #store surrounding depth for each translocation
@@ -445,7 +453,7 @@ def compKmers(kmers1,kmers1rc,read2,k,threshold,read1,doOffset,clip1,clip2,clips
                     offset = read1len - kmers1rc[km] - (len(read2) - itor) 
                 firstmatchrc = 1
     
-    if sumk >= max(threshold,clipsize-k):
+    if sumk >= max(threshold,clipsize-k):   #threshold = min(25,0.5*(min(len(read2),len(read1))- k))
         tmp = [offset,'F']
         return tmp
     elif sumkrc >= max(threshold,clipsize-k):
@@ -562,6 +570,7 @@ def main():
     bam = opts['bam'] #bam file
     exon = opts['exon'] #exon coordinate bed file [chr <tab> start <tab> end <tab> genename]
     twobit = opts['twobit'] #2bit genome file (e.g., hg19.2bit)
+    important_genelist = opts['important-genelist'] #important-genelist
     targets = 0 #restrict analysis to targeted regions (.bed) [use 0 if non-targeted]
     for opt in opts:
         if opt == 'targets':
@@ -642,8 +651,6 @@ def main():
     if args.F:
         FORCEREMAKE = 1
     disablechrprefix = 0 #if 1, do not add "chr" prefix to chromosome names
-    if args.C:
-        disablechrprefix = 1
     k = args.k
     buffer = args.b
     pad = args.a
@@ -752,10 +759,6 @@ def main():
 
     count = 0
 
-    addchrprefix = 1 #if 1, check for "chr" prefix; if not present, add it
-    if disablechrprefix == 1:
-        addchrprefix = 0
-
     prevgene = {} #store genes already seen [format: chr_start]
     prevread = {} #store reads already seen
     fusepairs = {} #store unique read pairs per fusion
@@ -778,6 +781,12 @@ def main():
             progressItor += 1
             if progressItor > 3:
                 progressItor = 0
+        Q = 0
+        quality = tokens[10]
+        for i in quality:
+            Q += ord(i) - 33
+        if Q/len(quality) < 30:
+            continue
         id = tokens[0]
         #skip read ids that have already been processed
         if id in prevread:
@@ -1075,6 +1084,7 @@ def main():
         print(currtime)
         print(" Validating candidate fusions...\n")
 #==================================================================================================
+
     progress_itor = 0
     progressItor = 0
     prev_prog = -1
@@ -1141,11 +1151,12 @@ def main():
                 for gene2 in rankedlist[depth]:
                     for bp2 in rankedlist[depth][gene2]:
                         itor2 += 1
-                        if itor2 > MAXBPS2EXAMINE:
-                            break #examine x most abundant putative breakpoints paired with gene 1
-                        count2 = breakpoints[gene2][bp2]
-                        if count2 < MINBPSUPPORT:
-                            continue #skip if <x reads support
+                        if important_gene(important_genelist,gene,gene2) == False:
+                            if itor2 > MAXBPS2EXAMINE:
+                                break #examine x most abundant putative breakpoints paired with gene 1
+                            count2 = breakpoints[gene2][bp2]
+                            if count2 < MINBPSUPPORT:
+                                continue #skip if <x reads support
                         
                         progress_itor += 1
                         if progress_itor % 100 == 0 and VERBOSE == 1:
@@ -1189,6 +1200,7 @@ def main():
                         if clipOrder2 == "NC":
                             clipOrder2b = "CN"
                         sameb = compKmers(kmers1b,kmers1rcb,read2b,k,thresholdb,read1b,doOffset,clipOrderb,clipOrder2b,clipsize)
+                        target_gene = ['ALK','RET','ROS1']
                         if same[0] != 9999999 and sameb[0] != 9999999:
                             if '{S1}_{S2}_{S3}_{S4}_{S5}_{S6}'.format(S1=gene,S2=gene2,S3=bp,S4=bp2,S5=clipOrder,S6=clipOrder2) in usedpair:
                                 continue
@@ -1423,6 +1435,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
