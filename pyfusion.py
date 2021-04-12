@@ -543,9 +543,9 @@ def main():
     #exon = opts['exon'] #exon coordinate bed file [chr <tab> start <tab> end <tab> genename]
     #twobit = opts['twobit'] #2bit genome file (e.g., hg19.2bit)
     #important_genelist = opts['important-genelist'] #important-genelist
-    exon = '/haplox/users/yangbo/factrea/py/exons.bed'
-    twobit = '/haplox/users/yangbo/factrea/py/hg19.2bit'
-    important_genelist = '/haplox/users/yangbo/factrea/py/important_gene.txt'
+    exon = 'exons.bed'
+    twobit = 'hg19.2bit'
+    important_genelist = 'important_gene.txt'
     targets = 0 #restrict analysis to targeted regions (.bed) [use 0 if non-targeted]
     for opt in opts:
         if opt == 'targets':
@@ -1030,6 +1030,7 @@ def main():
     gc.collect()
     usedpair = {}
     bestfusions = {}
+    print(coors2gene,depth_sort,fusepairs,getothercoor,prevgene,prevread,storeids4blast)
 
     fusions = OUTPUTDIR + '/' + bam[::-1].split('/',1)[0][::-1].replace('bam','factera.fusions.txt')
 
