@@ -1030,7 +1030,6 @@ def main():
     gc.collect()
     usedpair = {}
     bestfusions = {}
-    print(coors2gene,depth_sort,fusepairs,getothercoor,prevgene,prevread,storeids4blast)
 
     fusions = OUTPUTDIR + '/' + bam[::-1].split('/',1)[0][::-1].replace('bam','factera.fusions.txt')
 
@@ -1070,11 +1069,12 @@ def main():
         itor = 0
         for bp in sorted(breakpoints[gene], key=breakpoints[gene].__getitem__, reverse=True):
             itor += 1
-            if itor > MAXBPS2EXAMINE:
-                break #only examine the x most abundant putative breakpoints for gene 1
-            count = breakpoints[gene][bp]
-            if count < MINBPSUPPORT:
-                continue #skip if <x reads support
+            if important_gene(important_genelist,gene,gene2) == False:
+                if itor > MAXBPS2EXAMINE:
+                    break #only examine the x most abundant putative breakpoints for gene 1
+                count = breakpoints[gene][bp]
+                if count < MINBPSUPPORT:
+                    continue #skip if <x reads support
             bp_ = bp
             bp_ = bp.split(':')[1]
             chr_ = bp.split(':')[0]
