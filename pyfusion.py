@@ -4,12 +4,13 @@ import os
 import time
 import subprocess
 import re
+import gc
 
 parser = argparse.ArgumentParser()
 parser.add_argument("bam", type=str, help="minimum number of breakpoint-spanning reads required for output")
-parser.add_argument("exon", type=str, help="minimum number of breakpoint-spanning reads required for output")
-parser.add_argument("twobit", type=str, help="minimum number of breakpoint-spanning reads required for output")
-parser.add_argument("important-genelist", type=str, help="the most important gene that you don't want to filter it")
+#parser.add_argument("exon", type=str, help="minimum number of breakpoint-spanning reads required for output")
+#parser.add_argument("twobit", type=str, help="minimum number of breakpoint-spanning reads required for output")
+#parser.add_argument("important-genelist", type=str, help="the most important gene that you don't want to filter it")
 parser.add_argument("--targets", type=str, default='0', help="minimum number of breakpoint-spanning reads required for output")
 parser.add_argument("-o", nargs='?', action="store" , type=str, required=True, help="output directory (tumor.bam directory)")
 parser.add_argument("-r", nargs='?', const=5, default=5 , type=int, help="minimum number of breakpoint-spanning reads required for output")
@@ -39,7 +40,6 @@ def important_gene(important_genelist,gene1,gene2):
         else:
             return False
     
-
 def getNormDepth(bestfusions, buffer, targets, OUTPUTDIR, bam):
     coors = {} #store surrounding depth for each translocation
     for bp_depth in bestfusions:
@@ -97,9 +97,6 @@ def getNormDepth(bestfusions, buffer, targets, OUTPUTDIR, bam):
 
     return coors
 
-
-
-
 #=========================================================================================================== 
 def makeBLASTdb(now,storeids4blast,VERBOSE,blast,OUTPUTDIR,bam,blastitor,fusetargets):
     currtime = time.time() - now
@@ -108,17 +105,11 @@ def makeBLASTdb(now,storeids4blast,VERBOSE,blast,OUTPUTDIR,bam,blastitor,fusetar
     (blastreads_error,blastreads) = subprocess.getstatusoutput("samtools view -F 2 -L {S1} {S2}".format(S1=fusetargets,S2=bam))
     
     count = 0
-    progress = ['|','/','-','\\']
-    progressItor = 0 
     tokens_1 = [73,133,89,121,165,181,101,117,153,185,69,137,77,141]
     for line in blastreads.split('\n'):
         tokens = line.split("\t")
         if tokens[0] in storeids4blast:
             count += 1
-            if count % 1000 == 0 and VERBOSE == 1:
-                progressItor += 1
-                if progressItor > 3:
-                    progressItor = 0
             Ns = tokens[9].replace('N','')
             if float(len(Ns)/len(tokens[9])) < 0.75:
                 continue
@@ -126,9 +117,6 @@ def makeBLASTdb(now,storeids4blast,VERBOSE,blast,OUTPUTDIR,bam,blastitor,fusetar
             blast.write(">{S1}_{S2}_IP\n{S3}\n".format(S1=tokens[0],S2=blastitor,S3=tokens[9]))
         elif tokens[1] in tokens_1:
             count += 1
-            if count % 1000 == 0 and VERBOSE == 1:
-                if progressItor > 3:
-                    progressItor = 0
             #so makeblastdb does not complain about >40% Ns
             Ns = tokens[9].replace('N','')
             if float(len(Ns)/len(tokens[9])) < 0.75:
@@ -292,14 +280,7 @@ def doBLAST(fusionSeqFa,gene,gene2,buffer,min_len,bam,OUTPUTDIR,BLASTTHREADS,min
     data = "{S1}\t{S2}\t{S3}\t{S4}\t{S5}\t".format(S1=bp_depth,S2=bpd_SC,S3=bpd_UM,S4=bpd_IP,S5=proper_pair_depth)
     #print proper pair depth
     return data   
-
-            
-
-
-        
-
-
-
+       
 #=========================================================================================================== 
 #parse cigar string    
 def parsecigar(cigar):
@@ -320,7 +301,6 @@ def parsecigar(cigar):
     data.append(cigar)
 
     return data
-
 
 #============================================================================================================
 #given start coordinate of a read, find and return the closest gene----------
@@ -375,8 +355,6 @@ def BinSearch(target,exonstart):
             posmax = mid
         else:
             return mid
-
-
 
 def cmpFunc(index,arrayRef,target):
     item = int(arrayRef[index])
@@ -446,7 +424,7 @@ def compKmers(kmers1,kmers1rc,read2,k,threshold,read1,doOffset,clip1,clip2,clips
                 firstmatch = 1
         if km in kmers1rc:
             sumkrc += 1
-            if firstmatch == 0:
+            if firstmatchrc == 0:
                 if clip1 == "NC" and clip2 == "NC":
                     offset = itor - kmers1rc[km]
                 elif clip1 == "CN" and clip2 == "CN":
@@ -508,10 +486,6 @@ def bp_correction(read2,same,offsetbp2,bp2_,chr2,OUTPUTDIR,bam,twobit):
     data = [offsetbp1,offsetbp2]
     return data 
         
-
-
-
-
 #===========================================================================================================       
 #convert read into kmers; store as hashtable
 def getKmers(read1,k):
@@ -521,7 +495,6 @@ def getKmers(read1,k):
         if km not in kmers:
             kmers[km] = itor
     return kmers
-
 
 #===========================================================================================================
 #return reverse complement of read
@@ -563,14 +536,16 @@ def getConsensus(consensus,gene,bp_):
         sq = sq + mx_char
     return sq
         
-
 def main():
     opts = vars(args)
 
     bam = opts['bam'] #bam file
-    exon = opts['exon'] #exon coordinate bed file [chr <tab> start <tab> end <tab> genename]
-    twobit = opts['twobit'] #2bit genome file (e.g., hg19.2bit)
-    important_genelist = opts['important-genelist'] #important-genelist
+    #exon = opts['exon'] #exon coordinate bed file [chr <tab> start <tab> end <tab> genename]
+    #twobit = opts['twobit'] #2bit genome file (e.g., hg19.2bit)
+    #important_genelist = opts['important-genelist'] #important-genelist
+    exon = '/haplox/users/yangbo/factrea/py/exons.bed'
+    twobit = '/haplox/users/yangbo/factrea/py/hg19.2bit'
+    important_genelist = '/haplox/users/yangbo/factrea/py/important_gene.txt'
     targets = 0 #restrict analysis to targeted regions (.bed) [use 0 if non-targeted]
     for opt in opts:
         if opt == 'targets':
@@ -650,7 +625,6 @@ def main():
     FORCEREMAKE = 0 #if 1, force remake of blast database if one already exists
     if args.F:
         FORCEREMAKE = 1
-    disablechrprefix = 0 #if 1, do not add "chr" prefix to chromosome names
     k = args.k
     buffer = args.b
     pad = args.a
@@ -764,8 +738,6 @@ def main():
     fusepairs = {} #store unique read pairs per fusion
     genes2exons = {} #store exon coordinates and chromosome for each candidate fusion gene
     storeids4blast = {} #store read ids of properly paired reads that passed filtration criteria; used to build blast database
-    progress = ['|','/','-','\\']
-    progressItor = 0 
 
     if VERBOSE == 1:
         currtime = time.time() - now
@@ -777,10 +749,7 @@ def main():
     for line in imp_pairs.split('\n'):
         tokens = line.split('\t')
         count += 1
-        if count % 1000 == 0 and VERBOSE == 1:
-            progressItor += 1
-            if progressItor > 3:
-                progressItor = 0
+
         Q = 0
         quality = tokens[10]
         for i in quality:
@@ -957,10 +926,6 @@ def main():
             continue
         
         count += 1
-        if count % 100 == 0 and VERBOSE == 1:
-            progressItor += 1
-            if progressItor > 3:
-                progressItor = 0
         
         tmp = cigar.replace('S','')
         
@@ -970,7 +935,6 @@ def main():
         parsed = parsecigar(cigar)
         parsed2 = parsecigar(parsed[2])
         matched = 0 #cigar string 'M'
-        skipped = 0 #cigar string 'S'
 
         #if forward orientation, properly paired, and with match followed by clip, go to next..
         if tokens[1] == '99' or tokens[1] == '163':
@@ -982,12 +946,10 @@ def main():
                 continue
         #only keep clipped regions at least clipsize (default 16 bases; only 1 in 4.3B by random chance)
         if parsed[1] == 'S':
-            skipped = parsed[0]
             matched = int(parsed2[0])
             if int(parsed[0]) < clipsize:
                 continue
         elif parsed2[1] == 'S':
-            skipped = parsed2[0]
             matched = int(parsed[0])
             if int(parsed2[0]) < clipsize:
                 continue
@@ -1064,6 +1026,8 @@ def main():
         makeBLASTdb(now,storeids4blast,VERBOSE,blast,OUTPUTDIR,bam,blastitor,fusetargets)
 #------------------------------------------------------------------------------
 #sort soft-clipped reads by breakpoint, identify "best" breakpoints and analyze
+    del coors2gene,depth_sort,fusepairs,getothercoor,prevgene,prevread,storeids4blast
+    gc.collect()
     usedpair = {}
     bestfusions = {}
 
@@ -1085,9 +1049,6 @@ def main():
         print(" Validating candidate fusions...\n")
 #==================================================================================================
 
-    progress_itor = 0
-    progressItor = 0
-    prev_prog = -1
     fusioncons = ''
     for gene in breakpoints:
         rankedlist = {}
@@ -1108,7 +1069,6 @@ def main():
         itor = 0
         for bp in sorted(breakpoints[gene], key=breakpoints[gene].__getitem__, reverse=True):
             itor += 1
-            switch = 0
             if itor > MAXBPS2EXAMINE:
                 break #only examine the x most abundant putative breakpoints for gene 1
             count = breakpoints[gene][bp]
@@ -1122,7 +1082,6 @@ def main():
             bp_ = int(bp_)
             if bp_ not in screads[gene]:
                 continue
-            c_id = screads[gene][bp_][3]
             clipOrder = screads[gene][bp_][2]
             read1 = screads[gene][bp_][1]
             read1b = read1
@@ -1157,12 +1116,6 @@ def main():
                             count2 = breakpoints[gene2][bp2]
                             if count2 < MINBPSUPPORT:
                                 continue #skip if <x reads support
-                        
-                        progress_itor += 1
-                        if progress_itor % 100 == 0 and VERBOSE == 1:
-                            progressItor += 1
-                            if progressItor > 3:
-                                progressItor = 0
 
                         bp2_ = bp2.split(':')[1]
                         chr2 = bp2.split(':')[0]
@@ -1171,7 +1124,6 @@ def main():
                         bp2_ = int(bp2_)
                         if bp2_ not in screads[gene2]:
                             continue
-                        id2 = screads[gene2][bp2_][3]
                         clipOrder2 = screads[gene2][bp2_][2]
                         read2 = screads[gene2][bp2_][1]
                         read2b = read2
@@ -1200,7 +1152,6 @@ def main():
                         if clipOrder2 == "NC":
                             clipOrder2b = "CN"
                         sameb = compKmers(kmers1b,kmers1rcb,read2b,k,thresholdb,read1b,doOffset,clipOrderb,clipOrder2b,clipsize)
-                        target_gene = ['ALK','RET','ROS1']
                         if same[0] != 9999999 and sameb[0] != 9999999:
                             if '{S1}_{S2}_{S3}_{S4}_{S5}_{S6}'.format(S1=gene,S2=gene2,S3=bp,S4=bp2,S5=clipOrder,S6=clipOrder2) in usedpair:
                                 continue
@@ -1275,10 +1226,8 @@ def main():
                             #print "$fusioncons\t$bp_\t$bp2_\n"; 
                             if fusioncons == "":
                                 fusioncons = '-'
-                                fusioncons_bp = 0
                             else:
                                 fusioncons = "[{S1}]".format(S1=fusioncons)
-                            nonref_insert = ''
                             fusionSeqFa = vals[0] + '\n' + part1 + "" + part2
                             #=============================================================
 
@@ -1310,8 +1259,6 @@ def main():
                                 bestfusions[bp_depth] = {}
                             if code not in bestfusions[bp_depth]:
                                 bestfusions[bp_depth][code] = tmp
-                            else:
-                                tmp2 = bestfusions[bp_depth][code]
 
     #if(($progress_itor == $total_comp || $progress_itor == 0) && $VERBOSE == 1) {print "\n";}
     #print header
@@ -1341,7 +1288,6 @@ def main():
 
             #Estimate rearrangement type
             first = orient1[:1]
-            second = orient1[3:4]
             first_polarity = orient1[1:2]
             sec_polarity = orient1[4:5]
             SR_type = ' - '
@@ -1365,13 +1311,13 @@ def main():
                 chr1,chr2 = chr2,chr1
                 bps = chr1 + ":" + str(bp1) + ' ' + chr2 + ':' +str(bp2)
             for bp_depth_ in bestfusions:
-                for bps_ in bestfusions[bp_depth]:
+                for bps_ in bestfusions[bp_depth_]:
                     tokens2 = bps_.split(' ')
                     bp1_ = int(tokens2[0].split(':')[1])
                     bp2_ = int(tokens2[1].split(':')[1])
                     chr1_ = tokens2[0].split(':')[0]
                     chr2_ = tokens2[1].split(':')[0]
-                    tmp_ = bestfusions[bp_depth][bps_]
+                    tmp_ = bestfusions[bp_depth_][bps_]
                     data_ = tmp_[0]
                     var_ = data_.split('\t')
                     orient2 = var_[7]
@@ -1429,14 +1375,6 @@ def main():
     if TIME == 1:
         print(now)
 
-
-
-
-
 if __name__ == "__main__":
     main()
-
-
-
-
 
